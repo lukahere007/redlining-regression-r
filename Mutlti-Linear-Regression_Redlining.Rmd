@@ -1,0 +1,360 @@
+---
+title: "Multiple Linear Regression: A Complete Example"
+author: "Luke Wamalwa"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# This chunk of code sets up the R session to perform the analysis
+# Load packages, load data, load any other source scripts that may contain
+# code or objects you will want to run to produce the report
+
+# Load packages
+library(tidyverse)
+library(caret)
+library(asbio)
+library(olsrr)
+library(xtable)
+library(shiny)
+library(knitr)
+library(DT)
+require(scatterplot3d)
+require(Hmisc)
+require(rgl)
+require(faraway)
+library(car)
+data(chredlin)
+attach(chredlin)
+
+# declare global chunk options
+knitr::opts_chunk$set(echo = FALSE) # Turn off print for all code chunks simultaneously
+
+# determine output format dynamically
+out_type <- knitr::opts_knit$get("rmarkdown.pandoc.to")
+
+# define custom function for data label outputs
+# The DT::datatable function is great for producing tables for HTML docs
+# Otherwise, use the knitr::kable function to produce tables
+# You should use the R help to learn about these two functions as they
+# will need to be used to produce visually appealing tables for your
+# report
+
+display_output <- function(dataset, out_type, filter_opt = 'none') {
+  
+  if (out_type == "html") {
+    out_table <- DT::datatable(dataset, filter = filter_opt)
+  } else {
+    out_table <- knitr::kable(dataset)
+  } 
+  
+  out_table
+}
+
+# Function to calculate predicted sum of squares (PRESS)
+PRESS <- function(linear.model) {
+  #' calculate the predictive residuals
+  pr <- residuals(linear.model)/(1-lm.influence(linear.model)$hat)
+  #' calculate the PRESS
+  PRESS <- sum(pr^2)
+  
+  return(PRESS)
+}
+
+```
+
+## I. Introduction
+
+*Description: Define the study, define \(Y_i\) and \(X_{ij}\), state the regression equation, model assumptions, sample size, and unknown parameters of interest. Articulate the study goals.* 
+
+### A. Study Design. 
+
+A study on insurance redlining is considered. To investigate charges by several Chicago community organizations that insurance companies were refusing to issue insurace to racial minorities, the U.S. Commission on Civil Rights gathered information on the number of FAIR plan policies written and renewed in Chicago (per 100 housing units, \(Y\)) by zip code for the months of December 1977 through May 1978.  FAIR plans were offered by the city of Chicago as a default policy to homeowners who had been rejected by the voluntary market.  Information on other variables that might also affect insurance writing were recorded. The variables are:  **race**, the racial composition in percentage of minority; **fire**, fires per 100 housing units; **theft**, thefts per 1000 population; **age**, percentage of housing units built before 1939; **income**, median family income in thousands of dollars; and **side**, North or South Side of Chicago
+
+
+```{r describe}
+# the display_output function was defined above, it's producing a table
+# for each of the calls below
+#display_output(chredlin, out_type)
+head(chredlin)
+```
+
+### B. Aims. 
+The purpose of the study is to **investigate the relationship** between racial composition and insurance refusal in Chicago between December 1977 and May 1978 while controlling for other potential sources of variation.
+
+## II. Methods
+
+### A. Preliminary Model.
+A multiple linear regression model is considered. Let
+
+  \(Y_i = \) the number of FAIR plan policies written and renewed (per 100 housing units) for the \(i^{th}\) zip code
+
+  \(X_{i1} =\) racial composition in percentage of minority for the \(i^{th}\) zip code, 
+
+  \(X_{i2} = \) fires (per 100 housing units) for the \(i^{th}\) zip code,  
+  
+  \(X_{i3} =\) thefts (per 1000 population) for the \(i^{th}\) zip code,  
+  
+  \(X_{i4} = \) percentage of housing units built before 1939 for the \(i^{th}\) zip code,  
+  
+  \(X_{i5} =\) log median family income (in thousands of dollars) for the \(i^{th}\) zip code.  
+  
+Based on automatic variable selection methods in combination with criterion-based statistics, income was dropped from the model. Partial residual plots, residual-versus-fitted plots, and measures of influence were investigated and no issues with high influence points, linearity, constant variance, independence, or normality were identified. Details are included in the Appendix.
+
+### B. Final Model
+The **final model** is given by
+
+\[Y_i = \beta_0 + \beta_1X_{i1} + \beta_2X_{i2} + \beta_3X_{i3} + \beta_4X_{i4} + \varepsilon_i\]
+
+where \(\varepsilon_i \sim iidN(0,\sigma^2)\), \(i = 1, 2, . . . , 47\), and \(\beta_0, \beta_1, . . . , \beta_4,\) and \(\sigma^2\) are the unknown model parameters.
+
+```{r}
+# I didn't even get this entered until I did the Appendix steps!
+# Fit the final model in order to describe it
+m2 <- lm(involact~race + fire + theft + age)
+```
+
+## III. Results.
+
+*Description: Should follow the goals listed in Section I.  For each goal, write out the hypotheses being tested (if applicable) and the specific approach taken (e.g., \(F\) test or \(t\) test, 95% confidence interval, Bonferroni adjustment, value of \(\alpha\), etc.).*
+
+The fitted model is displayed below. The rate of FAIR policies issued and renewed per 100 housing units increases, on average, `r round(summary(m2)$coef[2],2)` (95% CI `r round(confint(m2)[2,],2)`) for every 1% increase in minorities living in the zip code. Race explains `r round(partial.R2(lm(involact~fire+theft+age),m2)*100,2)`% of the variation in the number of FAIR plan policies per 100 housing units issued and renewed, as compared to `r round(partial.R2(lm(involact~race+theft+age),m2)*100,2)`% for fire rates, `r round(partial.R2(lm(involact~race+fire+age),m2)*100,2)`% for rates of theft, and `r round(partial.R2(lm(involact~race+fire+theft),m2)*100,2)`% for age.
+
+```{r}
+summary(m2)
+anova(m2)
+confint(m2)
+```
+
+## IV. Discussion
+
+*Description: Restate major findings and provide proper interpretation within the context of the study design. What are the implications of the findings?*
+
+There appears to be a positive relationship between FAIR plan policies issued and percentage minority of the population in zip codes. The limitations of this analysis include that it is done at the zip code level rather than at the family or person level.  Notice that the data is at the zip code level--an analysis of this data is unable to directly investigate whether minorities are denied insurance. This type of **ecological analysis** requires we assume that the chances a minority homeowner obtains a FAIR plan after adjusting for the effect of the other covariates is constant across all zip codes.  This assumption is not verifiable and may be violated, resulting in incorrect conclusions (called an **ecological fallacy**).
+
+## V. Appendix
+
+*Description: Include details of the model building process including: transformations, outliers, variable selection, assumption checking.*
+
+```{r}
+# Fit the initial model in order to refine it
+m1 <- lm(involact~race + fire + theft + age + log(income))
+```
+
+### A. Diagnostics for Predictors.
+The purpose of this section is to examine the distribution of predictors, identify any unusually large or small values, and examine bivariate associations to identify multicollinearity.  Unusual values should be flagged as they may **influence** the fit of the model.  Bivariate associations between predictors could cause issues if the purpose of the model is estimation.
+
+A scatterplot matrix indicates positive linear associations between all variables. 
+```{r}
+pairs(involact~race+fire+theft+age+log(income),data=chredlin)
+```
+
+The Pearson correlation coefficients for all pairwise association are shown in Table 1.  Log(income) is highly associated with the covariate of interest (race).
+```{r}
+cor(chredlin[,-7])
+```
+
+Strip plots for all predictors and the dependent variable (jittered) are shown next to boxplots of the same data. First, it should be acknowledged that a log transformation of **income** was taken.  Income, as expected, is positively skewed with most observations clustered together and a few observations at much higher income levels.  Income is considered in most analyses to be on a multiplicative scale, so because of that (and its skewed nature) a natural-log tranformation is appropriate.  
+
+Other features of note:  there is a wide range of values for **race**, the covariate of interest in this problem. There is also skewness visible in the distributions of **theft** and **fire**, with observations clustered close to zero and a few data points with large values. We may need to apply transformations if the model diagnostics and assumption checks indicate it. 
+
+```{r}
+for (i in 1:6){
+  par(mfrow=c(1,2))
+  stripchart(chredlin[,i], main = names(chredlin)[i],
+                          vertical = T, method = "jitter")
+  boxplot(chredlin[,i], main = names(chredlin)[i])
+  par(mfrow=c(1,1))
+}
+```
+
+### C. Screening of Predictors
+
+1. **Added variable plots** for each of the covariates are shown. Added variable plots (also known as partial residual plots or adjusted variable plots) provide evidence of the importance of a covariate given the other covariates already in the model. They also display the nature of the relationship between the covariate and the outcome (i.e., linear, curvilinear, transformation necessary, etc.) and any problematic data points with respect to the predictor. The plots all indicate no need for transformations because linear relationships are apparent.  They also indicate each variable provides some added value to a model that already includes all other covariates because the slopes of the linear relationships are all appear to be non-zero.  
+
+```{r}
+prplot(m1,1)
+prplot(m1,2)
+prplot(m1,3)
+prplot(m1,4)
+prplot(m1,5)
+```
+
+2. Since the purpose of the project is to examine the relationship between **race** and **involact** (racial minority percentage and rates of FAIR policies), the goal is estimating \(\beta_1\). **Multicollinearity** can create instability in estimation and so it should be avoided. We have already seen that log(income) is highly associated with race (\(r = \)`r round(cor(log(income),race),2)`) and several other covariates. **Variance inflation factors (VIF)**  measure how much the variances of the estimated regression coefficients are inflated as compared to when the predictor variables are not linearly related.  A maximum VIF in excess of 10 is a good rule of thumb for multicollinearity problems.  Based on the maximum VIF, `r round(max(vif(m1)),2)`, there do not appear to be any issues that need remediation. However, \(VIF_5\) is much larger than the others, which indicates income may be redundant.  
+
+```{r}
+vif(m1)
+vif(m2)
+```
+
+3. **Automatic variable selection methods** can be a useful starting point in eliminating redundant variables. They should only be used as a guide to the screening and removal (or addition) of predictors. Here, **race** is forced to stay in the model and all other covariates are allowed to add or drop: 
+
+```{r}
+library(leaps)
+ma <- regsubsets(involact~race + fire + theft + age + log(income), force.in = 1, data = chredlin, method = "seqrep")
+(sma <- summary(ma))
+```
+
+The summary output includes a matrix indicating which predictors are included in each of the 4 candidate models.  In the first model (first row of the matrix, indicated by a '2' for the number of predictors) with two predictors, only race and fire are included.  In the second model (row 2) with three (indicated by a '3') predictors, race, fire, and theft are included. The third and fourth models are in the last two rows of the matrix.
+
+Several criteria for selecting the best model are produced, including \(R^2_{adj}\) (large values are better), Bayes Information Criterion \(BIC\) (smaller values are better), Bayes Information Criterion \(BIC\) (smaller values are better), and Mallow's \(C_p\) statistic (values of \(C_p\) close to \(p\) (number of beta coefficients).  Other criteria not produced by the `regsubsets` function are \(AIC\) and \(PRESS\).  We will calculate these statistics for the two potential final models based on the results of automatic variable selection.  Here, all statistics indicate that the best model is one in which log(income) is removed: \(R^2_{adj} = \) `r round(sma$adj[3],3)`, \(BIC = \) `r round(sma$bic[3],3)`, \(C_p = \) `r round(sma$cp[3],3)`, \(AIC = \) `r round(extractAIC(m2)[2],3)`, and \(PRESS = \) `r round(PRESS(m2),3)`. The second best is the full model.  
+
+```{r}
+sma$adj # Adjusted R2 big
+plot(3:6,sma$adj, xlab = "Number of Parameters", ylab = expression(R^2[adj]))
+sma$bic # BIC small
+plot(3:6, sma$bic, xlab = "Number of Parameters", ylab = expression(BIC))
+sma$cp # Cp = p
+plot(3:6, sma$cp, xlab = "Number of Parameters", ylab = expression(C[p]))
+
+# Fit the reduced model
+m2 <- lm(involact~race + fire + theft + age)
+
+# Extract AIC
+extractAIC(m1)
+extractAIC(m2)
+
+# Extract PRESS
+PRESS(m1)
+PRESS(m2)
+
+```
+
+### C. Model Validation
+
+Model validation can help us select the model that has the best predictive performance in a hold-out sample.  There are several approaches to model validation, two of which are shown here.
+
+**Leave-one-out cross validation** is useful for smaller datasets where training and testing data are not feasible. This method involves:
+
+1. Leave out one data point and build the model using the remaining data.
+2. Test the model against the data point removed in Step 1 and record the prediction error.
+3. Repeat for all data points.
+4. Compute the overall prediction error by averaging the prediction errors.
+5. If comparing models, the model with lowest MSPE should be selected.
+
+The MSPE is smaller for the model without income.
+
+```{r}
+
+# Define the training method
+tr <- trainControl(method="LOOCV")
+
+# Train the model
+mreduced <- train(involact~race+fire+theft+age, data = chredlin, method = "lm", trControl = tr)
+print(mreduced)
+
+mfull <-train(involact~race+fire+theft+age+log(income), data=chredlin, method = "lm", trControl = tr)
+print(mfull)
+
+# Will come back to this
+#mint <-train(involact~race+fire+theft+age+race*theft, data=chredlin, method = "lm", #trControl = tr)
+#print(mint)
+
+```
+
+**K-fold cross validation** is useful for larger datasets where training and testing data are available/feasible. This method involves:
+
+1. Randomly split the data into \(k\) subsets. Reserve one of the subsets for testing.
+2. Build (train) the model on the remaining \(k-1\) subsets.
+3. Test the model on the reserved subset and record the mean squared prediction error.
+4. Repeat the process, changing the testing subset each time, until all \(k\) subsets have served as the testing set.
+5. Calculate the average of the \(k\) mean squared prediction errors.
+6. If comparing models, the model with the lowest MSPE should be chosen.
+
+Since \(k = 5\) or \(k=10\) is usually preferred, this approach is not feasible for this dataset. However, it can be implemented using the code below:
+
+```{r}
+# Define training control
+#set.seed(123) 
+#train.control <- trainControl(method = "cv", number = 10)
+# Train the model
+#model <- train(Y ~., data = df, method = "lm",
+ #              trControl = train.control)
+# Summarize the results
+#print(model)
+```
+
+If a quick check of assumptions and outliers shows no issues, the reduced model is the final model.
+
+### D. Residual Diagnostics
+
+#### 1. **Model Completeness**
+
+It's a good idea to also check for possible interactions (though we wouldn't hypothesize any for this analysis). The fitted-versus-residual plot looks like noise, with the exception of the diagonal streak in the plot near \(\hat{Y}=0\). This feature results from the large number of 0 response values in the data.  This plot supports normality and constant variance of the residuals.  
+
+```{r}
+plot(residuals(m2)~fitted(m2)) # Model looks appropriate
+
+race.i <- race > mean(race)
+fire.i <- fire > mean(fire)
+theft.i <- theft > mean(theft)
+age.i <- age > mean(age)
+income.i <- log(income) > mean(log(income))
+
+interaction.plot(race.i,fire.i,involact)
+interaction.plot(race.i,theft.i,involact) # Look at that! Is it significant?
+interaction.plot(race.i,age.i,involact)
+interaction.plot(race.i,income.i,involact)
+
+# Test for significant interaction using general linear f-test
+m3 <- lm(involact~race+fire+theft+age+race*theft)
+anova(m3) # Doesn't look like it is important but should probably consider for model validation, just in case
+```
+
+#### 2. **Outliers**
+
+Look for outliers in \(X\) and in \(Y\), and also investigate whether there are any influential points.
+
+```{r}
+plot(residuals(m2)~fitted(m2))
+plot(rstudent(m2)~fitted(m2)) #Studentized residual
+identify(rstudent(m2)~fitted(m2))
+plot(rstandard(m2)~fitted(m2)) #Deleted studentized residual
+which(abs(rstandard(m2)) > 3) # No unusual residuals
+which(hatvalues(m2)>2*5/47) # High leverage?
+
+chredlin[23:24,] # One of these is our theft outlier, zip 60607 
+                 # Both have high fire rates, other zip 60612
+                 # 60612 also has one of the highest involact and race combinations
+                 # Neither show up as influential
+
+plot(dffits(m2)) # Compare to 2sqrt(p/n) for large datasets and 1 for small
+which(dffits(m2)>1)
+which(dfbetas(m2)>1) # Compare to 2/sqrt(n) for large datasets and 1 for small
+plot(cooks.distance(m2)) # Compare percentile F(p,n-p) to 10th or 20th
+q <- pf(cooks.distance(m2),5,47-5)
+which(q>.1) 
+which(q>.2)
+
+ols_plot_cooksd_bar(m2) # One way to visualize Cook's distance
+ols_plot_dfbetas(m2) # Visualize influence on estimation of betas
+ols_plot_dffits(m2) # Visualize influence on estimation of Y
+
+# Another approach to getting influence statistics
+#m2i <- influence(m2) # Save influence stats
+#halfnorm(cooks.distance(m2)) # Another approach to visualize Cook's distance
+chredlin[6,]
+```
+
+Observation 6 and 35 stick out as potentially high influence.  A fit of the model without them shows the model results do not change and the model can be considered robust to the data point. Even if the model results changed, we would not drop these points as they are real. We would find a method more robust to outliers.
+
+```{r}
+summary(lm(involact~race+fire+theft+age, subset = -c(6,35)))
+```
+
+#### 3. Constant Variance
+
+There are no apparent issues with non-constant variance.
+
+```{r}
+plot(abs(residuals(m2))~predict(m2), xlab = expression(hat(Y)), ylab = "Abs Residuals")
+```
+
+#### 4. Normality
+
+A Q-Q plot supports approximate normality. 
+
+```{r}
+qqnorm(residuals(m2))
+qqline(residuals(m2))
+```
+
